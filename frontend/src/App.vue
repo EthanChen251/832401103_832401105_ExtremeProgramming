@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import ContactEditor from './ContactEditor.vue'
 
 defineProps({ username: { type: String, required: true }, busy: Boolean })
 const emit = defineEmits(['logout', 'expired'])
@@ -11,6 +12,87 @@ const error = ref('')
 const methodLabels = { phone: '电话', email: '邮箱', social: '社交账号', address: '地址' }
 const favorites = computed(() => contacts.value.filter(contact => contact.favorite))
 const visibleContacts = computed(() => favoritesOnly.value ? favorites.value : contacts.value)
+const editing = ref(null)
+const working = ref(false)
+const feedback = ref('')
+const upload = ref(null)
+
+async function run(action) {
+  if (working.value) return
+  working.value = true
+  feedback.value = ''
+  try {
+    await action()
+  } catch (err) {
+    feedback.value = err instanceof TypeError ? '网络连接失败，请重试。' : err.message
+  } finally {
+    working.value = false
+  }
+}
+
+async function contactRequest(suffix, options) {
+  const response = await fetch('/api/v1/contacts' + suffix, options)
+  if (response.status === 401) emit('expired')
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}))
+    const issue = body.error?.details?.[0]
+    const where = issue?.row ? '第 ' + issue.row + ' 行 ' : ''
+    throw new Error(where + (issue?.message || body.error?.message || '操作失败，请重试。'))
+  }
+  return response
+}
+
+function edit(contact) {
+  feedback.value = ''
+  editing.value = contact
+}
+
+function write(contact, fields) {
+  return run(async () => {
+    await contactRequest(contact.id ? '/' + contact.id : '', {
+      method: contact.id ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields),
+    })
+    editing.value = null
+    if (!contact.id) favoritesOnly.value = false
+    await loadContacts()
+  })
+}
+
+function remove(contact) {
+  if (!window.confirm('确定删除「' + contact.name + '」及其所有联系方式？')) return
+  return run(async () => {
+    await contactRequest('/' + contact.id, {method:'DELETE'})
+    await loadContacts()
+  })
+}
+
+function importFile(event) {
+  const file = event.target.files[0]
+  event.target.value = ''
+  if (!file) return
+  return run(async () => {
+    const body = new FormData()
+    body.append('file', file)
+    const response = await contactRequest('/import', {method:'POST', body})
+    const result = await response.json()
+    feedback.value = '已导入 ' + result.imported_count + ' 位联系人。'
+    favoritesOnly.value = false
+    await loadContacts()
+  })
+}
+
+function exportFile() {
+  return run(async () => {
+    const response = await contactRequest('/export')
+    const url = URL.createObjectURL(await response.blob())
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'contacts.xlsx'
+    link.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  })
+}
 
 async function loadContacts() {
   loading.value = true
@@ -54,6 +136,15 @@ onMounted(loadContacts)
           <h2 id="list-title">{{ favoritesOnly ? '我的收藏' : '全部联系人' }}</h2>
           <span v-if="!loading && !error">{{ visibleContacts.length }} 位联系人</span>
         </div>
+        <div v-if="!editing" class="actions">
+          <button class="retry" :disabled="working || loading" @click="edit({name:'',notes:'',methods:[]})">新增联系人</button>
+          <button class="text-button" :disabled="working || loading" @click="upload.click()">导入 Excel</button>
+          <button class="text-button" :disabled="working || loading" @click="exportFile">导出 Excel</button>
+          <input ref="upload" type="file" accept=".xlsx" hidden @change="importFile">
+        </div>
+        <ContactEditor v-if="editing" :contact="editing" :labels="methodLabels" :busy="working"
+          @cancel="editing = null; feedback = ''" @save="write(editing, $event)" />
+        <p v-if="feedback" role="status">{{ feedback }}</p>
         <div v-if="loading" class="status" role="status">正在读取联系人…</div>
         <div v-else-if="error || !visibleContacts.length" class="status">
           <div class="folio" aria-hidden="true"><i></i></div>
@@ -73,6 +164,11 @@ onMounted(loadContacts)
               </div>
             </dl>
             <p v-if="contact.notes" class="notes">{{ contact.notes }}</p>
+            <div v-if="!editing" class="actions">
+              <button class="text-button" :disabled="working" :aria-pressed="contact.favorite" @click="write(contact,{favorite:!contact.favorite})">{{ contact.favorite ? '取消收藏' : '收藏' }}</button>
+              <button class="text-button" :disabled="working" @click="edit(contact)">编辑</button>
+              <button class="text-button" :disabled="working" @click="remove(contact)">删除</button>
+            </div>
           </div>
         </article>
       </section>
@@ -92,6 +188,8 @@ onMounted(loadContacts)
   background: var(--paper);
 }
 * { box-sizing: border-box; }
+.actions { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin: 10px 0; }
+button:disabled { opacity: .55; cursor: wait; }
 body { margin: 0; }
 .directory { max-width: 1180px; margin: auto; padding: 0 clamp(18px, 5vw, 72px) 60px; }
 header { display: flex; align-items: center; gap: 14px; height: 86px; border-bottom: 1px solid var(--ink); }

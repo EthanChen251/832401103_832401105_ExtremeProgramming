@@ -118,31 +118,5 @@ def logout():
 
 def contact_database(user_id):
     db = database("contacts_db", f"contacts-{user_id}.sqlite3")
-    db.executescript(Path(__file__).with_name("contacts.sql").read_text(encoding="utf-8"))
+    db.executescript(Path(__file__).with_name("schema.sql").read_text(encoding="utf-8"))
     return db
-
-
-@api.get("/contacts")
-def list_contacts():
-    user = current_user()
-    if user is None:
-        return jsonify(message="请先登录。"), 401
-    db = contact_database(user["id"])
-    filters = request.args.getlist("favorite")
-    if filters and filters not in (["true"], ["false"]):
-        return jsonify(message="收藏筛选参数无效。"), 400
-    sql = "SELECT * FROM contacts"
-    params = ()
-    if filters:
-        sql += " WHERE favorite=?"
-        params = (filters == ["true"],)
-    items = {}
-    db.execute("BEGIN")
-    for row in db.execute(sql + " ORDER BY id", params):
-        items[row["id"]] = dict(row, favorite=bool(row["favorite"]), methods=[])
-    for row in db.execute("""SELECT * FROM contact_methods ORDER BY contact_id,
-                           CASE type WHEN 'phone' THEN 0 WHEN 'email' THEN 1
-                           WHEN 'social' THEN 2 ELSE 3 END, position"""):
-        if row["contact_id"] in items:
-            items[row["contact_id"]]["methods"].append({"type": row["type"], "value": row["value"]})
-    return jsonify(items=list(items.values()))
