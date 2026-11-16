@@ -1,6 +1,9 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 
+defineProps({ username: { type: String, required: true }, busy: Boolean })
+const emit = defineEmits(['logout', 'expired'])
+
 const contacts = ref([])
 const favoritesOnly = ref(false)
 const loading = ref(true)
@@ -14,6 +17,10 @@ async function loadContacts() {
   error.value = ''
   try {
     const response = await fetch('/api/v1/contacts')
+    if (response.status === 401) {
+      emit('expired')
+      return
+    }
     if (!response.ok) throw new Error()
     const { items } = await response.json()
     if (!Array.isArray(items)) throw new Error()
@@ -30,7 +37,10 @@ onMounted(loadContacts)
 
 <template>
   <main class="directory">
-    <header><span class="book-mark" aria-hidden="true"></span><h1>通讯录</h1></header>
+    <header><span class="book-mark" aria-hidden="true"></span><h1>通讯录</h1>
+      <span class="account-name">{{ username }}</span>
+      <button class="text-button" :disabled="busy" @click="emit('logout')">退出登录</button>
+    </header>
     <div class="workspace">
       <nav aria-label="联系人筛选">
         <button v-for="view in [{ favorite: false, label: '全部联系人', count: contacts.length }, { favorite: true, label: '我的收藏', count: favorites.length }]"
