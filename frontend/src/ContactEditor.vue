@@ -35,11 +35,3 @@ function save() {
     </fieldset>
   </form>
 </template>
-
-<style scoped>
-fieldset { margin: 20px 0; border: 1px solid var(--line); padding: 20px; min-width: 0; }
-legend { font-weight: bold; }
-label { display: grid; gap: 5px; margin-bottom: 12px; }
-input, textarea, select { min-width: 0; border: 1px solid #99968a; border-radius: 4px; padding: 8px; background: #fffefa; color: var(--ink); font: inherit; }
-.method-row { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 8px; margin: 8px 0; }
-</style>

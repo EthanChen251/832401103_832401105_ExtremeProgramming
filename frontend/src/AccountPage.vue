@@ -2,6 +2,15 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import Directory from './App.vue'
 
+const themeKey = 'directory-theme'
+const theme = ref(localStorage.getItem(themeKey) || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'))
+document.documentElement.dataset.theme = theme.value
+function switchTheme() {
+  theme.value = theme.value === 'dark' ? 'light' : 'dark'
+  document.documentElement.dataset.theme = theme.value
+  localStorage.setItem(themeKey, theme.value)
+}
+
 const user = ref(null)
 const checking = ref(true)
 const busy = ref(false)
@@ -75,16 +84,26 @@ onUnmounted(() => channel?.close())
 </script>
 
 <template>
+  <header class="masthead">
+    <span class="brand"><span class="book-mark" aria-hidden="true"></span>通讯录</span>
+    <span v-if="user" class="account-name">{{ user.name }}</span>
+    <button v-if="user" class="text-button" :disabled="busy" @click="submit('logout')">退出登录</button>
+    <button type="button" class="theme-toggle" :aria-label="theme === 'dark' ? '切换至浅色模式' : '切换至深色模式'"
+      :title="theme === 'dark' ? '切换至浅色模式' : '切换至深色模式'" @click="switchTheme"><span aria-hidden="true">◐</span></button>
+  </header>
   <main v-if="checking" class="directory"><p class="status" role="status">正在读取账号…</p></main>
   <template v-else-if="user">
-    <Directory :key="user.id" :username="user.name" :busy="busy" @logout="submit('logout')" @expired="restore" />
+    <Directory :key="user.id" @expired="restore" />
     <p v-if="message" class="auth-error" role="alert">{{ message }}</p>
   </template>
   <main v-else class="directory">
-    <header><span class="book-mark" aria-hidden="true"></span><h1>通讯录</h1></header>
     <div class="auth-layout">
-      <div class="auth-intro"><div class="folio" aria-hidden="true"><i></i></div><h2>个人通讯录</h2>
-        <p>登录后查看你的联系人与收藏。</p>
+      <div class="auth-intro">
+        <div class="card-art" aria-hidden="true">
+          <i class="back-card"></i><i class="front-card"><b></b></i>
+        </div>
+        <h1 lang="en">Address <em>Book.</em></h1>
+        <p>你的个人通讯录</p>
       </div>
       <form class="auth-form" @submit.prevent="submit(registering ? 'register' : 'login')">
         <h2>{{ registering ? '注册账号' : '登录' }}</h2>
@@ -101,23 +120,3 @@ onUnmounted(() => channel?.close())
     </div>
   </main>
 </template>
-
-<style>
-.account-name { margin-left: auto; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.text-button { background: transparent; border: 0; color: var(--accent); padding: 10px 0; }
-.text-button:hover { text-decoration: underline; }
-.auth-layout { margin: clamp(32px, 8vw, 110px) auto; max-width: 800px; display: grid; grid-template-columns: 1fr 1fr; gap: clamp(32px, 7vw, 96px); }
-.auth-intro { border-left: 3px solid var(--accent); padding-left: 25px; align-self: start; }
-.auth-intro p, .hint { color: var(--muted); margin-top: 10px; }
-.auth-form { display: grid; gap: 16px; align-content: start; }
-.auth-form h2 { font-size: 30px; }
-.auth-form label { display: grid; gap: 6px; font-size: 14px; }
-.auth-form input { width: 100%; padding: 11px; border: 1px solid #938f81; border-radius: 4px; background: #fffefa; color: var(--ink); font: inherit; }
-.auth-form input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.auth-error { color: #923522; }
-.hint { font-size: 13px; margin: -8px 0 0; }
-@media (max-width: 680px) {
-  .auth-layout { grid-template-columns: 1fr; max-width: 420px; }
-  .auth-intro .folio { display: none; }
-}
-</style>
