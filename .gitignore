@@ -7,3 +7,6 @@
 __pycache__/
 *.py[cod]
 /backend/instance/
+
+# 本地后端校验脚本与报告
+/test/
