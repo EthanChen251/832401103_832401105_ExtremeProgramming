@@ -17,20 +17,28 @@ const searchPattern = computed(() => {
   const literal = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return new RegExp('(' + literal + ')', 'iu')
 })
+const methodOrder = [...Object.keys(methodLabels), 'social']
+const cards = computed(() => contacts.value.map(contact => ({
+  contact,
+  methods: contact.methods.map(method => ({
+    ...displayMethod(method),
+    key: JSON.stringify([method.type, method.value]),
+  }))
+    .sort((a, b) => methodOrder.indexOf(a.type) - methodOrder.indexOf(b.type)),
+})))
 const matches = computed(() => {
   const pattern = searchPattern.value
-  if (!pattern) return contacts.value
-  return contacts.value.filter(contact =>
+  if (!pattern) return cards.value
+  return cards.value.filter(({ contact, methods }) =>
     pattern.test(contact.name) || pattern.test(contact.notes) ||
-    contact.methods.some(method => pattern.test(method.value)))
+    methods.some(method => pattern.test(method.value)))
 })
 const groups = computed(() => [
-  { pinned: true, title: '置顶收藏', items: matches.value.filter(contact => contact.favorite) },
-  { pinned: false, title: '其他联系人', items: matches.value.filter(contact => !contact.favorite) },
+  { pinned: true, title: '置顶收藏', items: matches.value.filter(({ contact }) => contact.favorite) },
+  { pinned: false, title: '其他联系人', items: matches.value.filter(({ contact }) => !contact.favorite) },
 ].filter(group => group.items.length))
 const loading = ref(true)
 const error = ref('')
-const methodOrder = [...Object.keys(methodLabels), 'social']
 const allCount = ref(null)
 const favoriteCount = ref(null)
 let listRequest = 0
@@ -46,14 +54,6 @@ function avatarFor(id) {
   // Use the permanent contact ID as a seed so reloads keep the same avatar.
   const seed = Math.imul(id ^ (id >>> 16), 0x9e3779b1) >>> 0
   return animals[Math.floor(seed / 2 ** 32 * animals.length)]
-}
-
-function displayContact(contact) {
-  return {
-    ...contact,
-    methods: contact.methods.map(displayMethod)
-      .sort((a, b) => methodOrder.indexOf(a.type) - methodOrder.indexOf(b.type)),
-  }
 }
 
 async function run(action) {
@@ -164,7 +164,7 @@ async function loadContacts() {
     const { items } = await response.json()
     if (current !== listRequest) return
     if (!Array.isArray(items)) throw new Error()
-    contacts.value = items.map(displayContact)
+    contacts.value = items
     if (favorite) {
       favoriteCount.value = items.length
     } else {
@@ -232,15 +232,15 @@ onMounted(loadContacts)
           <section v-for="group in groups" :key="group.title" class="contact-group">
             <h3 v-if="!favoritesOnly && (group.pinned || groups.length > 1)" class="group-title">{{ t(group.title) }}</h3>
             <div class="contact-grid">
-              <article v-for="contact in group.items" :key="contact.id" class="contact-card" :class="{ pinned: group.pinned }" :data-palette="contact.id % 4">
+              <article v-for="{ contact, methods } in group.items" :key="contact.id" class="contact-card" :class="{ pinned: group.pinned }" :data-palette="contact.id % 4">
                 <div class="identity">
                   <span class="portrait" aria-hidden="true">{{ avatarFor(contact.id) }}</span>
                   <h3 :title="contact.name"><SearchHighlight :text="contact.name" :pattern="searchPattern" /></h3>
                   <small v-if="contact.favorite" :aria-label="t('已收藏')">★</small>
                 </div>
-                <div class="contact-info" v-if="contact.methods.length || contact.notes">
-                  <dl v-if="contact.methods.length">
-                    <div v-for="method in contact.methods" :key="JSON.stringify([method.type, method.value])">
+                <div class="contact-info" v-if="methods.length || contact.notes">
+                  <dl v-if="methods.length">
+                    <div v-for="method in methods" :key="method.key">
                       <dt>{{ t(methodLabels[method.type] || '社交账号') }}</dt>
                       <dd class="method-value">
                         <span>
