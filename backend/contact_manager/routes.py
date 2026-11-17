@@ -147,6 +147,17 @@ def export_contacts() -> Response:
     )
 
 
+@api.get("/template")
+def download_template() -> Response:
+    return send_file(
+        excel.build_workbook([], template=True),
+        mimetype=XLSX_MIMETYPE,
+        as_attachment=True,
+        download_name="contacts-template.xlsx",
+        conditional=False,
+    )
+
+
 def _read_json(
     *, partial: bool = False
 ) -> tuple[dict[str, Any], Response | None]:

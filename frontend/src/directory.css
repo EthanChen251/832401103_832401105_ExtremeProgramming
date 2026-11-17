@@ -42,6 +42,8 @@ button:disabled { opacity: .55; cursor: wait; }
 .book-mark::after { content: ""; position: absolute; top: 5px; left: 3px; width: 7px; height: 2px; background: currentColor; }
 .theme-toggle { width: 36px; height: 36px; padding: 0; display: grid; place-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; font-size: 23px; line-height: 1; }
 .theme-toggle:hover { background: var(--soft); }
+.language-toggle { min-height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); font-size: 14px; white-space: nowrap; }
+.language-toggle:hover { background: var(--soft); }
 .account-name { min-width: 0; max-width: 30%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 .auth-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 355px); align-items: center; gap: clamp(48px, 8vw, 118px); max-width: 908px; margin: clamp(54px, 12vh, 128px) auto; }
 .auth-intro { padding: 16px 0; }
@@ -79,7 +81,19 @@ nav span { margin-left: 4px; font-size: 13px; font-variant-numeric: tabular-nums
 .status { min-height: 220px; display: grid; align-content: center; justify-items: center; gap: 10px; text-align: center; }
 .status .large { margin-bottom: 8px; transform: scale(1.35); }
 .operation-feedback { white-space: pre-line; overflow-wrap: anywhere; }
-.contact-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 18px; margin-top: 24px; }
+.search-bar { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+.search-bar input { max-width: 32em; background: var(--surface); }
+.search-bar button { flex: none; }
+.contact-card mark { color: var(--on-primary); background: var(--primary); border-radius: 2px; }
+.method-value { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 4px; }
+.copy-value { border: 0; border-radius: 4px; padding: 3px 5px; font-size: 12px; color: var(--accent); background: var(--soft); }
+@media (hover: hover) and (pointer: fine) {
+  .copy-value { opacity: 0; }
+  .method-value:hover .copy-value, .method-value:focus-within .copy-value { opacity: 1; }
+}
+.contact-groups { display: grid; gap: 30px; margin-top: 24px; }
+.group-title { margin-bottom: 12px; color: var(--muted); font-size: 15px; font-weight: 600; }
+.contact-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
 .contact-card {
   --sky: #c4e4fa;
   display: flex; flex-direction: column; gap: 12px; min-width: 0;
@@ -90,6 +104,21 @@ nav span { margin-left: 4px; font-size: 13px; font-variant-numeric: tabular-nums
 .contact-card[data-palette="1"] { --sky: #cbdaf6; }
 .contact-card[data-palette="2"] { --sky: #c7e9ef; }
 .contact-card[data-palette="3"] { --sky: #d4def0; }
+.contact-card.pinned {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: linear-gradient(135deg, var(--soft), var(--surface) 74%);
+}
+.pinned .identity small { margin-left: auto; }
+.contact-card:focus-within { outline: 1px solid var(--accent); }
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .contact-card { transition: transform 180ms ease-out, box-shadow 180ms ease-out; }
+  .contact-card:hover { transform: translateY(-3px); box-shadow: 0 7px 16px -9px color-mix(in srgb, var(--accent) 50%, transparent); }
+  .portrait { transition: transform 180ms ease-out; }
+  .contact-card:hover .portrait { transform: rotate(-5deg); }
+}
+@media (max-width: 920px) {
+  .contact-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .identity { display: flex; gap: 10px; align-items: center; }
 .portrait {
   flex: 0 0 42px; height: 42px; border-radius: 50%;
@@ -131,6 +160,10 @@ legend { padding: 0 8px; font-weight: 650; }
   .auth-intro h1 { font-size: clamp(45px, 10vw, 60px); }
   .auth-intro p { margin-top: 8px; }
   .card-art { display: none; }
-  .contact-grid { gap: 12px; }
+  .contact-grid { grid-template-columns: 1fr; gap: 12px; }
   .method-row { grid-template-columns: 5.5em minmax(0, 1fr) auto; }
+}
+@media (max-width: 440px) {
+  .masthead { flex-wrap: wrap; gap: 5px 8px; padding-block: 8px; }
+  .masthead .account-name { max-width: 20%; }
 }

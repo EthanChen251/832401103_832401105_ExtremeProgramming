@@ -1,4 +1,5 @@
 <script setup>
+import { language, t, toggleLanguage } from './language.js'
 import { onMounted, onUnmounted, ref } from 'vue'
 import Directory from './App.vue'
 
@@ -85,16 +86,17 @@ onUnmounted(() => channel?.close())
 
 <template>
   <header class="masthead">
-    <span class="brand"><span class="book-mark" aria-hidden="true"></span>通讯录</span>
+    <span class="brand"><span class="book-mark" aria-hidden="true"></span>{{ t('通讯录') }}</span>
     <span v-if="user" class="account-name">{{ user.name }}</span>
-    <button v-if="user" class="text-button" :disabled="busy" @click="submit('logout')">退出登录</button>
-    <button type="button" class="theme-toggle" :aria-label="theme === 'dark' ? '切换至浅色模式' : '切换至深色模式'"
-      :title="theme === 'dark' ? '切换至浅色模式' : '切换至深色模式'" @click="switchTheme"><span aria-hidden="true">◐</span></button>
+    <button v-if="user" class="text-button" :disabled="busy" @click="submit('logout')">{{ t('退出登录') }}</button>
+    <button type="button" class="language-toggle" :lang="language === 'en' ? 'zh-CN' : 'en'" @click="toggleLanguage">{{ language === 'en' ? '中文' : 'English' }}</button>
+    <button type="button" class="theme-toggle" :aria-label="t(theme === 'dark' ? '切换至浅色模式' : '切换至深色模式')"
+      :title="t(theme === 'dark' ? '切换至浅色模式' : '切换至深色模式')" @click="switchTheme"><span aria-hidden="true">◐</span></button>
   </header>
-  <main v-if="checking" class="directory"><p class="status" role="status">正在读取账号…</p></main>
+  <main v-if="checking" class="directory"><p class="status" role="status">{{ t('正在读取账号…') }}</p></main>
   <template v-else-if="user">
     <Directory :key="user.id" @expired="restore" />
-    <p v-if="message" class="auth-error" role="alert">{{ message }}</p>
+    <p v-if="message" class="auth-error" role="alert">{{ t(message) }}</p>
   </template>
   <main v-else class="directory">
     <div class="auth-layout">
@@ -103,19 +105,19 @@ onUnmounted(() => channel?.close())
           <i class="back-card"></i><i class="front-card"><b></b></i>
         </div>
         <h1 lang="en">Address <em>Book.</em></h1>
-        <p>你的个人通讯录</p>
+        <p>{{ t('你的个人通讯录') }}</p>
       </div>
       <form class="auth-form" @submit.prevent="submit(registering ? 'register' : 'login')">
-        <h2>{{ registering ? '注册账号' : '登录' }}</h2>
-        <label>用户名<input v-model.trim="name" name="username" autocomplete="username" maxlength="40" required></label>
-        <label>密码<input v-model="password" name="password" type="password" :autocomplete="registering ? 'new-password' : 'current-password'" minlength="8" maxlength="128" required></label>
+        <h2>{{ t(registering ? '注册账号' : '登录') }}</h2>
+        <label>{{ t('用户名') }}<input v-model.trim="name" name="username" autocomplete="username" maxlength="40" required></label>
+        <label>{{ t('密码') }}<input v-model="password" name="password" type="password" :autocomplete="registering ? 'new-password' : 'current-password'" minlength="8" maxlength="128" required></label>
         <template v-if="registering">
-          <p class="hint">密码长度为 8–128 个字符。</p>
-          <label>确认密码<input v-model="confirmation" name="confirmation" type="password" autocomplete="new-password" required></label>
+          <p class="hint">{{ t('密码长度为 8–128 个字符。') }}</p>
+          <label>{{ t('确认密码') }}<input v-model="confirmation" name="confirmation" type="password" autocomplete="new-password" required></label>
         </template>
-        <p v-if="message" class="auth-error" role="alert">{{ message }}</p>
-        <button class="retry" :disabled="busy">{{ busy ? '正在处理…' : registering ? '注册并登录' : '登录' }}</button>
-        <button type="button" class="text-button" :disabled="busy" @click="toggleMode">{{ registering ? '已有账号，去登录' : '创建新账号' }}</button>
+        <p v-if="message" class="auth-error" role="alert">{{ t(message) }}</p>
+        <button class="retry" :disabled="busy">{{ t(busy ? '正在处理…' : registering ? '注册并登录' : '登录') }}</button>
+        <button type="button" class="text-button" :disabled="busy" @click="toggleMode">{{ t(registering ? '已有账号，去登录' : '创建新账号') }}</button>
       </form>
     </div>
   </main>

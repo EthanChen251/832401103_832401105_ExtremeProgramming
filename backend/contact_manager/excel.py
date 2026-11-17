@@ -199,10 +199,16 @@ def _parse_favorite(value: object) -> bool | None:
     return None
 
 
-def build_workbook(contacts: list[dict[str, Any]]) -> BytesIO:
+def build_workbook(contacts: list[dict[str, Any]], *, template: bool = False) -> BytesIO:
     """按约定表头写出通讯录，返回已定位到开头的 XLSX 数据流。"""
     workbook = Workbook(write_only=True)
     sheet = workbook.create_sheet(SHEET_NAME)
+    if template:
+        for index, header in enumerate(HEADERS, start=1):
+            column = sheet.column_dimensions[get_column_letter(index)]
+            column.width = 18 if header == "favorite" else 28
+            if header != "favorite":
+                column.number_format = "@"
     sheet.append(HEADERS)
     for contact in contacts:
         _write_contact_row(sheet, contact)
