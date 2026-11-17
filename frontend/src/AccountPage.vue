@@ -31,7 +31,7 @@ async function request(action, data) {
     throw new Error('无法连接账号服务，请检查后端是否已启动。')
   }
   const result = await response.json()
-  if (!response.ok) throw new Error(result.message || '请求失败，请重试。')
+  if (!response.ok) throw new Error(result?.error?.message || result?.message || '请求失败，请重试。')
   return result.user
 }
 

@@ -65,7 +65,7 @@ textarea { resize: vertical; }
 .text-button:hover { text-decoration: underline; text-underline-offset: 4px; }
 .auth-error { color: var(--alert); }
 .hint, small, dt, .section-head span, .notes { color: var(--muted); font-size: 14px; }
-.workspace { max-width: 850px; margin: clamp(28px, 6vw, 76px) auto 64px; }
+.workspace { margin: clamp(28px, 5vw, 64px) auto 64px; }
 nav { display: inline-flex; gap: 2px; padding: 3px; background: var(--soft); border-radius: 10px; margin-bottom: 25px; }
 nav button { background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 7px 12px; color: var(--muted); }
 nav button[aria-pressed=true] { color: var(--text); background: var(--surface); border-color: var(--line); }
@@ -76,10 +76,33 @@ nav span { margin-left: 4px; font-size: 13px; font-variant-numeric: tabular-nums
 .toolbar { margin: 14px 0 0; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
 .status { min-height: 220px; display: grid; align-content: center; justify-items: center; gap: 10px; text-align: center; }
 .status .large { margin-bottom: 8px; transform: scale(1.35); }
-article { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(0, 2fr); gap: 25px; padding: 24px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
-.identity { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; align-content: start; }
-.initial { align-self: start; padding: 4px 10px; border-radius: 8px; background: var(--soft); color: var(--accent); font-family: Georgia, serif; }
-dl > div { display: grid; grid-template-columns: 5em minmax(0, 1fr); gap: 6px; }
+.operation-feedback { white-space: pre-line; overflow-wrap: anywhere; }
+.contact-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 18px; margin-top: 24px; }
+.contact-card {
+  --sky: #c5ded6;
+  display: flex; flex-direction: column; gap: 12px; min-width: 0;
+  height: 232px; padding: 18px 20px 10px; border: 1px solid var(--line); border-radius: 19px;
+  background: radial-gradient(ellipse at top left, color-mix(in srgb, var(--sky) 22%, transparent), transparent 60%), var(--surface);
+  overflow-wrap: anywhere;
+}
+.contact-card[data-palette="1"] { --sky: #f0d8c6; }
+.contact-card[data-palette="2"] { --sky: #d4deef; }
+.contact-card[data-palette="3"] { --sky: #e5d9ee; }
+.identity { display: flex; gap: 10px; align-items: center; }
+.portrait {
+  flex: 0 0 42px; height: 42px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--sky); font: 28px/1 "Apple Color Emoji", "Segoe UI Emoji", emoji;
+}
+.identity h3 { font-size: 20px; line-height: 1.35; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.identity small { color: var(--accent); }
+.contact-info { min-height: 0; overflow-y: auto; }
+.contact-info dl { display: grid; gap: 5px; }
+.contact-info dl + .notes { margin-top: 8px; }
+.contact-info dl > div { display: grid; grid-template-columns: 4em minmax(0, 1fr); gap: 8px; align-items: baseline; }
+.contact-info a { color: var(--accent); text-underline-offset: 3px; }
+.contact-info dd { font-size: 17px; font-weight: 550; }
+.contact-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-top: auto; }
+.contact-actions button { color: var(--muted); font-size: 13px; }
 .notes { white-space: pre-wrap; }
 .editor fieldset { min-width: 0; margin: 16px 0; }
 legend { padding: 0 8px; font-weight: 650; }
@@ -93,6 +116,6 @@ legend { padding: 0 8px; font-weight: 650; }
   .auth-intro h1 { font-size: clamp(45px, 10vw, 60px); }
   .auth-intro p { margin-top: 8px; }
   .card-art { display: none; }
-  article { grid-template-columns: 1fr; gap: 10px; }
+  .contact-grid { gap: 12px; }
   .method-row { grid-template-columns: 5.5em minmax(0, 1fr) auto; }
 }
