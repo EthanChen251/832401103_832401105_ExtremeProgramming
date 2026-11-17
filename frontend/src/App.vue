@@ -1,6 +1,7 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import ContactEditor from './ContactEditor.vue'
+import { displayMethod, methodLabels, websiteHref } from './contactMethods.js'
 
 const emit = defineEmits(['expired'])
 
@@ -8,13 +9,30 @@ const contacts = ref([])
 const favoritesOnly = ref(false)
 const loading = ref(true)
 const error = ref('')
-const methodLabels = { phone: '电话', email: '邮箱', social: '社交账号', address: '地址' }
-const favorites = computed(() => contacts.value.filter(contact => contact.favorite))
-const visibleContacts = computed(() => favoritesOnly.value ? favorites.value : contacts.value)
+const methodOrder = [...Object.keys(methodLabels), 'social']
+const allCount = ref(null)
+const favoriteCount = ref(null)
+let listRequest = 0
+const workbookColumns = { name: '姓名', notes: '备注', favorite: '收藏', phones: '电话', emails: '邮箱', socials: '社交账号', addresses: '地址' }
 const editing = ref(null)
 const working = ref(false)
 const feedback = ref('')
 const upload = ref(null)
+const animals = Array.from('🐼🦊🐨🐱🐶🐰🐻🐯🐹🐸🐵🐷🐮🐧🦁🐙')
+
+function avatarFor(id) {
+  // Use the permanent contact ID as a seed so reloads keep the same avatar.
+  const seed = Math.imul(id ^ (id >>> 16), 0x9e3779b1) >>> 0
+  return animals[Math.floor(seed / 2 ** 32 * animals.length)]
+}
+
+function displayContact(contact) {
+  return {
+    ...contact,
+    methods: contact.methods.map(displayMethod)
+      .sort((a, b) => methodOrder.indexOf(a.type) - methodOrder.indexOf(b.type)),
+  }
+}
 
 async function run(action) {
   if (working.value) return
@@ -34,9 +52,16 @@ async function contactRequest(suffix, options) {
   if (response.status === 401) emit('expired')
   if (!response.ok) {
     const body = await response.json().catch(() => ({}))
-    const issue = body.error?.details?.[0]
-    const where = issue?.row ? '第 ' + issue.row + ' 行 ' : ''
-    throw new Error(where + (issue?.message || body.error?.message || '操作失败，请重试。'))
+    const problem = body?.error
+    if (response.status === 422 && problem?.code === 'INVALID_WORKBOOK' && Array.isArray(problem.details)) {
+      const lines = problem.details.filter(issue => issue?.message).map(({ row, field, message }) => {
+        const column = Object.hasOwn(workbookColumns, field) ? workbookColumns[field] + '（' + field + '）' : field
+        const location = [row != null && '第 ' + row + ' 行', column].filter(Boolean).join(' · ')
+        return location ? location + '：' + message : message
+      })
+      if (lines.length) throw new Error(lines.join('\n'))
+    }
+    throw new Error(problem?.details?.[0]?.message || problem?.message || '操作失败，请重试。')
   }
   return response
 }
@@ -62,6 +87,7 @@ function remove(contact) {
   if (!window.confirm('确定删除「' + contact.name + '」及其所有联系方式？')) return
   return run(async () => {
     await contactRequest('/' + contact.id, {method:'DELETE'})
+    if (allCount.value !== null) allCount.value--
     await loadContacts()
   })
 }
@@ -93,23 +119,40 @@ function exportFile() {
   })
 }
 
+function switchView(favorite) {
+  if (favorite === favoritesOnly.value) return
+  favoritesOnly.value = favorite
+  feedback.value = ''
+  loadContacts()
+}
+
 async function loadContacts() {
+  const current = ++listRequest
+  const favorite = favoritesOnly.value
   loading.value = true
   error.value = ''
   try {
-    const response = await fetch('/api/v1/contacts')
+    const response = await fetch('/api/v1/contacts' + (favorite ? '?favorite=true' : ''))
+    if (current !== listRequest) return
     if (response.status === 401) {
       emit('expired')
       return
     }
     if (!response.ok) throw new Error()
     const { items } = await response.json()
+    if (current !== listRequest) return
     if (!Array.isArray(items)) throw new Error()
-    contacts.value = items
+    contacts.value = items.map(displayContact)
+    if (favorite) {
+      favoriteCount.value = items.length
+    } else {
+      allCount.value = items.length
+      favoriteCount.value = items.filter(contact => contact.favorite).length
+    }
   } catch {
-    error.value = '无法读取联系人。请确认后端服务已启动，然后重试。'
+    if (current === listRequest) error.value = '无法读取联系人。请确认后端服务已启动，然后重试。'
   } finally {
-    loading.value = false
+    if (current === listRequest) loading.value = false
   }
 }
 
@@ -119,29 +162,29 @@ onMounted(loadContacts)
 <template>
   <main class="directory">
     <div class="workspace">
-      <nav aria-label="联系人筛选">
-        <button v-for="view in [{ favorite: false, label: '全部联系人', count: contacts.length }, { favorite: true, label: '我的收藏', count: favorites.length }]"
+      <ContactEditor v-if="editing" :contact="editing" :labels="methodLabels" :busy="working"
+        :feedback="feedback" @back="edit(null)" @save="write(editing, $event)" />
+      <nav v-if="!editing" aria-label="联系人筛选">
+        <button v-for="view in [{ favorite: false, label: '全部联系人', count: allCount }, { favorite: true, label: '我的收藏', count: favoriteCount }]"
           :key="view.label" :aria-pressed="favoritesOnly === view.favorite"
-          @click="favoritesOnly = view.favorite">
-          {{ view.label }} <span v-if="!loading && !error">{{ view.count }}</span>
+          @click="switchView(view.favorite)">
+          {{ view.label }} <span v-if="!loading && !error && view.count !== null">{{ view.count }}</span>
         </button>
       </nav>
-      <section aria-labelledby="list-title">
+      <section v-if="!editing" aria-labelledby="list-title">
         <div class="section-head">
           <h2 id="list-title">{{ favoritesOnly ? '我的收藏' : '全部联系人' }}</h2>
-          <span v-if="!loading && !error">{{ visibleContacts.length }} 位联系人</span>
+          <span v-if="!loading && !error">{{ contacts.length }} 位联系人</span>
         </div>
-        <div v-if="!editing" class="actions toolbar">
+        <div class="actions toolbar">
           <button class="retry" :disabled="working || loading" @click="edit({name:'',notes:'',methods:[]})">新增联系人</button>
           <button class="text-button" :disabled="working || loading" @click="upload.click()">导入 Excel</button>
           <button class="text-button" :disabled="working || loading" @click="exportFile">导出 Excel</button>
           <input ref="upload" type="file" accept=".xlsx" hidden @change="importFile">
         </div>
-        <ContactEditor v-if="editing" :contact="editing" :labels="methodLabels" :busy="working"
-          @cancel="editing = null; feedback = ''" @save="write(editing, $event)" />
-        <p v-if="feedback" role="status">{{ feedback }}</p>
+        <p v-if="feedback" class="operation-feedback" role="status">{{ feedback }}</p>
         <div v-if="loading" class="status" role="status">正在读取联系人…</div>
-        <div v-else-if="error || !visibleContacts.length" class="status">
+        <div v-else-if="error || !contacts.length" class="status">
           <span class="book-mark large" aria-hidden="true"></span>
           <template v-if="error">
             <h3 role="alert">暂时无法读取联系人</h3>
@@ -150,22 +193,33 @@ onMounted(loadContacts)
           </template>
           <h3 v-else>{{ favoritesOnly ? '暂无收藏联系人' : '通讯录为空' }}</h3>
         </div>
-        <article v-for="contact in (!loading && !error ? visibleContacts : [])" :key="contact.id">
-          <div class="identity"><span class="initial" aria-hidden="true">{{ Array.from(contact.name)[0] }}</span><h3>{{ contact.name }}</h3><small v-if="contact.favorite">★ 已收藏</small></div>
-          <div>
-            <dl v-if="contact.methods.length">
-              <div v-for="method in contact.methods" :key="JSON.stringify([method.type, method.value])">
-                <dt>{{ methodLabels[method.type] }}</dt><dd>{{ method.value }}</dd>
-              </div>
-            </dl>
-            <p v-if="contact.notes" class="notes">{{ contact.notes }}</p>
-            <div v-if="!editing" class="actions">
+        <div v-else class="contact-grid">
+          <article v-for="contact in contacts" :key="contact.id" class="contact-card" :data-palette="contact.id % 4">
+            <div class="identity">
+              <span class="portrait" aria-hidden="true">{{ avatarFor(contact.id) }}</span>
+              <h3 :title="contact.name">{{ contact.name }}</h3>
+              <small v-if="contact.favorite" aria-label="已收藏">★</small>
+            </div>
+            <div class="contact-info" v-if="contact.methods.length || contact.notes">
+              <dl v-if="contact.methods.length">
+                <div v-for="method in contact.methods" :key="JSON.stringify([method.type, method.value])">
+                  <dt>{{ methodLabels[method.type] || '社交账号' }}</dt>
+                  <dd>
+                    <a v-if="method.type === 'website' && websiteHref(method.value)" :href="websiteHref(method.value)"
+                      target="_blank" rel="noopener noreferrer">{{ method.value }}</a>
+                    <template v-else>{{ method.value }}</template>
+                  </dd>
+                </div>
+              </dl>
+              <p v-if="contact.notes" class="notes">{{ contact.notes }}</p>
+            </div>
+            <div class="contact-actions">
               <button class="text-button" :disabled="working" :aria-pressed="contact.favorite" @click="write(contact,{favorite:!contact.favorite})">{{ contact.favorite ? '取消收藏' : '收藏' }}</button>
               <button class="text-button" :disabled="working" @click="edit(contact)">编辑</button>
               <button class="text-button" :disabled="working" @click="remove(contact)">删除</button>
             </div>
-          </div>
-        </article>
+          </article>
+        </div>
       </section>
     </div>
   </main>
