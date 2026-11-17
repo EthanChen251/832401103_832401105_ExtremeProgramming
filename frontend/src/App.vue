@@ -1,14 +1,22 @@
 <script setup>
+import { language, t } from './language.js'
 import { computed, onMounted, ref } from 'vue'
 import ContactEditor from './ContactEditor.vue'
+import CopyValue from './CopyValue.vue'
+import SearchHighlight from './SearchHighlight.vue'
 import { displayMethod, methodLabels, websiteHref } from './contactMethods.js'
 
 const emit = defineEmits(['expired'])
 
 const contacts = ref([])
 const favoritesOnly = ref(false)
-const loading = ref(true)
-const error = ref('')
+const search = ref('')
+const searchPattern = computed(() => {
+  const term = search.value.trim()
+  if (!term) return null
+  const literal = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp('(' + literal + ')', 'iu')
+})
 const methodOrder = [...Object.keys(methodLabels), 'social']
 const cards = computed(() => contacts.value.map(contact => ({
   contact,
@@ -18,6 +26,19 @@ const cards = computed(() => contacts.value.map(contact => ({
   }))
     .sort((a, b) => methodOrder.indexOf(a.type) - methodOrder.indexOf(b.type)),
 })))
+const matches = computed(() => {
+  const pattern = searchPattern.value
+  if (!pattern) return cards.value
+  return cards.value.filter(({ contact, methods }) =>
+    pattern.test(contact.name) || pattern.test(contact.notes) ||
+    methods.some(method => pattern.test(method.value)))
+})
+const groups = computed(() => [
+  { pinned: true, title: '置顶收藏', items: matches.value.filter(({ contact }) => contact.favorite) },
+  { pinned: false, title: '其他联系人', items: matches.value.filter(({ contact }) => !contact.favorite) },
+].filter(group => group.items.length))
+const loading = ref(true)
+const error = ref('')
 const allCount = ref(null)
 const favoriteCount = ref(null)
 let listRequest = 0
@@ -25,6 +46,7 @@ const workbookColumns = { name: '姓名', notes: '备注', favorite: '收藏', p
 const editing = ref(null)
 const working = ref(false)
 const feedback = ref('')
+const workbookIssues = ref([])
 const upload = ref(null)
 const animals = Array.from('🐼🦊🐨🐱🐶🐰🐻🐯🐹🐸🐵🐷🐮🐧🦁🐙')
 
@@ -38,6 +60,7 @@ async function run(action) {
   if (working.value) return
   working.value = true
   feedback.value = ''
+  workbookIssues.value = []
   try {
     await action()
   } catch (err) {
@@ -54,12 +77,8 @@ async function contactRequest(suffix, options) {
     const body = await response.json().catch(() => ({}))
     const problem = body?.error
     if (response.status === 422 && problem?.code === 'INVALID_WORKBOOK' && Array.isArray(problem.details)) {
-      const lines = problem.details.filter(issue => issue?.message).map(({ row, field, message }) => {
-        const column = Object.hasOwn(workbookColumns, field) ? workbookColumns[field] + '（' + field + '）' : field
-        const location = [row != null && '第 ' + row + ' 行', column].filter(Boolean).join(' · ')
-        return location ? location + '：' + message : message
-      })
-      if (lines.length) throw new Error(lines.join('\n'))
+      workbookIssues.value = problem.details.filter(issue => issue?.message)
+      if (workbookIssues.value.length) throw new Error(problem.message || '工作簿校验失败，未导入任何联系人。')
     }
     throw new Error(problem?.details?.[0]?.message || problem?.message || '操作失败，请重试。')
   }
@@ -68,6 +87,7 @@ async function contactRequest(suffix, options) {
 
 function edit(contact) {
   feedback.value = ''
+  workbookIssues.value = []
   editing.value = contact
 }
 
@@ -84,7 +104,8 @@ function write(contact, fields) {
 }
 
 function remove(contact) {
-  if (!window.confirm('确定删除「' + contact.name + '」及其所有联系方式？')) return
+  const prompt = language.value === 'en' ? 'Delete “' + contact.name + '” and all their contact details?' : '确定删除「' + contact.name + '」及其所有联系方式？'
+  if (!window.confirm(prompt)) return
   return run(async () => {
     await contactRequest('/' + contact.id, {method:'DELETE'})
     if (allCount.value !== null) allCount.value--
@@ -107,13 +128,13 @@ function importFile(event) {
   })
 }
 
-function exportFile() {
+function downloadWorkbook(template = false) {
   return run(async () => {
-    const response = await contactRequest('/export')
+    const response = await contactRequest(template ? '/template' : '/export')
     const url = URL.createObjectURL(await response.blob())
     const link = document.createElement('a')
     link.href = url
-    link.download = 'contacts.xlsx'
+    link.download = template ? 'contacts-template.xlsx' : 'contacts.xlsx'
     link.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   })
@@ -123,6 +144,7 @@ function switchView(favorite) {
   if (favorite === favoritesOnly.value) return
   favoritesOnly.value = favorite
   feedback.value = ''
+  workbookIssues.value = []
   loadContacts()
 }
 
@@ -164,61 +186,82 @@ onMounted(loadContacts)
     <div class="workspace">
       <ContactEditor v-if="editing" :contact="editing" :labels="methodLabels" :busy="working"
         :feedback="feedback" @back="edit(null)" @save="write(editing, $event)" />
-      <nav v-if="!editing" aria-label="联系人筛选">
+      <nav v-if="!editing" :aria-label="t('联系人筛选')">
         <button v-for="view in [{ favorite: false, label: '全部联系人', count: allCount }, { favorite: true, label: '我的收藏', count: favoriteCount }]"
           :key="view.label" :aria-pressed="favoritesOnly === view.favorite"
           @click="switchView(view.favorite)">
-          {{ view.label }} <span v-if="!loading && !error && view.count !== null">{{ view.count }}</span>
+          {{ t(view.label) }} <span v-if="!loading && !error && view.count !== null">{{ view.count }}</span>
         </button>
       </nav>
       <section v-if="!editing" aria-labelledby="list-title">
         <div class="section-head">
-          <h2 id="list-title">{{ favoritesOnly ? '我的收藏' : '全部联系人' }}</h2>
-          <span v-if="!loading && !error">{{ contacts.length }} 位联系人</span>
+          <h2 id="list-title">{{ t(favoritesOnly ? '我的收藏' : '全部联系人') }}</h2>
+          <span v-if="!loading && !error">{{ matches.length }} {{ language === 'zh' ? '位联系人' : matches.length === 1 ? 'contact' : 'contacts' }}</span>
+        </div>
+        <div class="search-bar" role="search">
+          <input v-model="search" type="search" :aria-label="t('搜索联系人')" :placeholder="t('搜索姓名、电话、地址或备注')">
+          <button v-if="search" type="button" class="text-button" @click="search = ''">{{ t('清除搜索') }}</button>
         </div>
         <div class="actions toolbar">
-          <button class="retry" :disabled="working || loading" @click="edit({name:'',notes:'',methods:[]})">新增联系人</button>
-          <button class="text-button" :disabled="working || loading" @click="upload.click()">导入 Excel</button>
-          <button class="text-button" :disabled="working || loading" @click="exportFile">导出 Excel</button>
+          <button class="retry" :disabled="working || loading" @click="edit({name:'',notes:'',methods:[]})">{{ t('新增联系人') }}</button>
+          <button class="text-button" :disabled="working || loading" @click="upload.click()">{{ t('导入 Excel') }}</button>
+          <button class="text-button" :disabled="working" @click="downloadWorkbook(true)">{{ t('下载 Excel 模板') }}</button>
+          <button class="text-button" :disabled="working || loading" @click="downloadWorkbook()">{{ t('导出 Excel') }}</button>
           <input ref="upload" type="file" accept=".xlsx" hidden @change="importFile">
         </div>
-        <p v-if="feedback" class="operation-feedback" role="status">{{ feedback }}</p>
-        <div v-if="loading" class="status" role="status">正在读取联系人…</div>
-        <div v-else-if="error || !contacts.length" class="status">
+        <p v-if="feedback" class="operation-feedback" role="status">{{ t(feedback) }}</p>
+        <ul v-if="workbookIssues.length" class="workbook-errors">
+          <li v-for="(issue, index) in workbookIssues" :key="index">
+            <template v-if="issue.row != null">{{ language === 'en' ? 'Row ' + issue.row : '第 ' + issue.row + ' 行' }} · </template>
+            <template v-if="issue.field">{{ workbookColumns[issue.field] ? t(workbookColumns[issue.field]) + ' (' + issue.field + ')' : issue.field }}: </template>
+            {{ t(issue.message) }}
+          </li>
+        </ul>
+        <div v-if="loading" class="status" role="status">{{ t('正在读取联系人…') }}</div>
+        <div v-else-if="error || !matches.length" class="status">
           <span class="book-mark large" aria-hidden="true"></span>
           <template v-if="error">
-            <h3 role="alert">暂时无法读取联系人</h3>
-            <p>请确认通讯录服务已启动，然后重试。</p>
-            <button class="retry" @click="loadContacts">重新加载</button>
+            <h3 role="alert">{{ t('暂时无法读取联系人') }}</h3>
+            <p>{{ t('请确认通讯录服务已启动，然后重试。') }}</p>
+            <button class="retry" @click="loadContacts">{{ t('重新加载') }}</button>
           </template>
-          <h3 v-else>{{ favoritesOnly ? '暂无收藏联系人' : '通讯录为空' }}</h3>
+          <h3 v-else-if="searchPattern">{{ t('没有匹配的联系人') }}</h3>
+          <h3 v-else>{{ t(favoritesOnly ? '暂无收藏联系人' : '通讯录为空') }}</h3>
         </div>
-        <div v-else class="contact-grid">
-          <article v-for="{ contact, methods } in cards" :key="contact.id" class="contact-card" :data-palette="contact.id % 4">
-            <div class="identity">
-              <span class="portrait" aria-hidden="true">{{ avatarFor(contact.id) }}</span>
-              <h3 :title="contact.name">{{ contact.name }}</h3>
-              <small v-if="contact.favorite" aria-label="已收藏">★</small>
-            </div>
-            <div class="contact-info" v-if="methods.length || contact.notes">
-              <dl v-if="methods.length">
-                <div v-for="method in methods" :key="method.key">
-                  <dt>{{ methodLabels[method.type] || '社交账号' }}</dt>
-                  <dd>
-                    <a v-if="method.type === 'website' && websiteHref(method.value)" :href="websiteHref(method.value)"
-                      target="_blank" rel="noopener noreferrer">{{ method.value }}</a>
-                    <template v-else>{{ method.value }}</template>
-                  </dd>
+        <div v-else class="contact-groups">
+          <section v-for="group in groups" :key="group.title" class="contact-group">
+            <h3 v-if="!favoritesOnly && (group.pinned || groups.length > 1)" class="group-title">{{ t(group.title) }}</h3>
+            <div class="contact-grid">
+              <article v-for="{ contact, methods } in group.items" :key="contact.id" class="contact-card" :class="{ pinned: group.pinned }" :data-palette="contact.id % 4">
+                <div class="identity">
+                  <span class="portrait" aria-hidden="true">{{ avatarFor(contact.id) }}</span>
+                  <h3 :title="contact.name"><SearchHighlight :text="contact.name" :pattern="searchPattern" /></h3>
+                  <small v-if="contact.favorite" :aria-label="t('已收藏')">★</small>
                 </div>
-              </dl>
-              <p v-if="contact.notes" class="notes">{{ contact.notes }}</p>
+                <div class="contact-info" v-if="methods.length || contact.notes">
+                  <dl v-if="methods.length">
+                    <div v-for="method in methods" :key="method.key">
+                      <dt>{{ t(methodLabels[method.type] || '社交账号') }}</dt>
+                      <dd class="method-value">
+                        <span>
+                        <a v-if="method.type === 'website' && websiteHref(method.value)" :href="websiteHref(method.value)"
+                          target="_blank" rel="noopener noreferrer"><SearchHighlight :text="method.value" :pattern="searchPattern" /></a>
+                        <SearchHighlight v-else :text="method.value" :pattern="searchPattern" />
+                        </span>
+                        <CopyValue :value="method.value" :label="t(methodLabels[method.type] || '社交账号')" />
+                      </dd>
+                    </div>
+                  </dl>
+                  <p v-if="contact.notes" class="notes"><SearchHighlight :text="contact.notes" :pattern="searchPattern" /></p>
+                </div>
+                <div class="contact-actions">
+                  <button class="text-button" :disabled="working" :aria-pressed="contact.favorite" @click="write(contact,{favorite:!contact.favorite})">{{ t(contact.favorite ? '取消收藏' : '收藏') }}</button>
+                  <button class="text-button" :disabled="working" @click="edit(contact)">{{ t('编辑') }}</button>
+                  <button class="text-button" :disabled="working" @click="remove(contact)">{{ t('删除') }}</button>
+                </div>
+              </article>
             </div>
-            <div class="contact-actions">
-              <button class="text-button" :disabled="working" :aria-pressed="contact.favorite" @click="write(contact,{favorite:!contact.favorite})">{{ contact.favorite ? '取消收藏' : '收藏' }}</button>
-              <button class="text-button" :disabled="working" @click="edit(contact)">编辑</button>
-              <button class="text-button" :disabled="working" @click="remove(contact)">删除</button>
-            </div>
-          </article>
+          </section>
         </div>
       </section>
     </div>

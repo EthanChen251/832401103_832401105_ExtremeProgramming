@@ -43,6 +43,7 @@
 | `DELETE /api/v1/contacts/{id}` | 删除联系人及其全部联系方式。 | `204`，无响应体 |
 | `POST /api/v1/contacts/import` | `multipart/form-data`，文件字段 `file` 必须且只能出现一次，上传一个 `.xlsx` 文件。 | `200`，如 `{"imported_count":2}` |
 | `GET /api/v1/contacts/export` | 导出整个通讯录，包括未收藏的联系人；按 `id` 升序。通讯录为空时仅导出表头。 | `200`，`.xlsx` 文件，`Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`，`Content-Disposition: attachment; filename="contacts.xlsx"` |
+| `GET /api/v1/contacts/template` | 下载空白导入模板。使用相同的七列表头，文本列预设为文本格式，保留电话号码的前导零。 | `200`，附件 `contacts-template.xlsx` |
 
 `favorite` 查询参数只接受小写的 `true` 或 `false`，重复传入或取其他值时返回 `400`。`{id}` 必须是合法的正整数且对应一位现有联系人，否则返回 `404`。新增时两个时间字段取同一值；每次成功 `PATCH` 写入新的 `updated_at`，`created_at` 保持原值。
 
