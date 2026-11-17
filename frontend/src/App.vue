@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import ContactEditor from './ContactEditor.vue'
 import { displayMethod, methodLabels, websiteHref } from './contactMethods.js'
 
@@ -10,6 +10,14 @@ const favoritesOnly = ref(false)
 const loading = ref(true)
 const error = ref('')
 const methodOrder = [...Object.keys(methodLabels), 'social']
+const cards = computed(() => contacts.value.map(contact => ({
+  contact,
+  methods: contact.methods.map(method => ({
+    ...displayMethod(method),
+    key: JSON.stringify([method.type, method.value]),
+  }))
+    .sort((a, b) => methodOrder.indexOf(a.type) - methodOrder.indexOf(b.type)),
+})))
 const allCount = ref(null)
 const favoriteCount = ref(null)
 let listRequest = 0
@@ -24,14 +32,6 @@ function avatarFor(id) {
   // Use the permanent contact ID as a seed so reloads keep the same avatar.
   const seed = Math.imul(id ^ (id >>> 16), 0x9e3779b1) >>> 0
   return animals[Math.floor(seed / 2 ** 32 * animals.length)]
-}
-
-function displayContact(contact) {
-  return {
-    ...contact,
-    methods: contact.methods.map(displayMethod)
-      .sort((a, b) => methodOrder.indexOf(a.type) - methodOrder.indexOf(b.type)),
-  }
 }
 
 async function run(action) {
@@ -142,7 +142,7 @@ async function loadContacts() {
     const { items } = await response.json()
     if (current !== listRequest) return
     if (!Array.isArray(items)) throw new Error()
-    contacts.value = items.map(displayContact)
+    contacts.value = items
     if (favorite) {
       favoriteCount.value = items.length
     } else {
@@ -194,15 +194,15 @@ onMounted(loadContacts)
           <h3 v-else>{{ favoritesOnly ? '暂无收藏联系人' : '通讯录为空' }}</h3>
         </div>
         <div v-else class="contact-grid">
-          <article v-for="contact in contacts" :key="contact.id" class="contact-card" :data-palette="contact.id % 4">
+          <article v-for="{ contact, methods } in cards" :key="contact.id" class="contact-card" :data-palette="contact.id % 4">
             <div class="identity">
               <span class="portrait" aria-hidden="true">{{ avatarFor(contact.id) }}</span>
               <h3 :title="contact.name">{{ contact.name }}</h3>
               <small v-if="contact.favorite" aria-label="已收藏">★</small>
             </div>
-            <div class="contact-info" v-if="contact.methods.length || contact.notes">
-              <dl v-if="contact.methods.length">
-                <div v-for="method in contact.methods" :key="JSON.stringify([method.type, method.value])">
+            <div class="contact-info" v-if="methods.length || contact.notes">
+              <dl v-if="methods.length">
+                <div v-for="method in methods" :key="method.key">
                   <dt>{{ methodLabels[method.type] || '社交账号' }}</dt>
                   <dd>
                     <a v-if="method.type === 'website' && websiteHref(method.value)" :href="websiteHref(method.value)"

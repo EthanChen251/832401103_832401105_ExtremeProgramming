@@ -1,28 +1,40 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { storedMethod } from './contactMethods.js'
+import { displayMethod, storedMethod } from './contactMethods.js'
 
 const props = defineProps({ contact: Object, labels: Object, busy: Boolean, feedback: String })
 const emit = defineEmits(['save', 'back'])
 const name = ref(props.contact.name)
 const notes = ref(props.contact.notes)
 let nextKey = 0
-const methods = ref(props.contact.methods.map(method => ({ ...method, key: nextKey++ })))
-const changed = computed(() => name.value !== props.contact.name || notes.value !== props.contact.notes ||
-  methods.value.length !== props.contact.methods.length || methods.value.some((method, index) => {
-    const original = props.contact.methods[index]
-    return method.type !== original.type || method.value !== original.value
-  }))
+const methods = ref(props.contact.methods.map(original => ({
+  ...displayMethod(original),
+  original,
+  key: nextKey++,
+})))
+const changes = computed(() => {
+  const fields = {}
+  if (name.value !== props.contact.name) fields.name = name.value
+  if (notes.value !== props.contact.notes) fields.notes = notes.value
+
+  const before = props.contact.methods
+  const after = methods.value.map(storedMethod)
+  // PATCH replaces the entire array, so omit it unless the stored values changed.
+  if (after.length !== before.length || after.some((method, index) =>
+    method.type !== before[index].type || method.value !== before[index].value
+  )) {
+    fields.methods = after
+  }
+  return fields
+})
+const changed = computed(() => Object.keys(changes.value).length > 0)
 
 function back() {
   if (!changed.value || window.confirm('放弃尚未保存的修改并返回通讯录？')) emit('back')
 }
 
 function save() {
-  emit('save', {
-    name: name.value, notes: notes.value,
-    methods: methods.value.map(storedMethod),
-  })
+  if (changed.value) emit('save', changes.value)
 }
 </script>
 
@@ -44,7 +56,7 @@ function save() {
         <button type="button" class="text-button" @click="methods.splice(index,1)">移除</button>
       </div>
       <button type="button" class="text-button" @click="methods.push({type:'phone', value:'', key:nextKey++})">＋ 添加联系方式</button>
-      <div class="actions"><button class="retry">{{ busy ? '保存中…' : '保存联系人' }}</button>
+      <div class="actions"><button class="retry" :disabled="!changed">{{ busy ? '保存中…' : '保存联系人' }}</button>
         <button type="button" class="text-button" @click="back">返回通讯录</button>
         <span role="status">{{ feedback || (changed ? '有未保存的修改' : '') }}</span>
       </div>
