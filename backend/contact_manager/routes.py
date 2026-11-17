@@ -5,10 +5,11 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, NoReturn
 
-from flask import Blueprint, Response, jsonify, request, send_file, url_for
+from flask import Blueprint, Response, g, jsonify, request, send_file, url_for
 from werkzeug.exceptions import HTTPException, InternalServerError
 
 from . import db, excel
+from .accounts import current_user
 from .validation import validate_contact
 
 api = Blueprint("contacts", __name__, url_prefix="/api/v1/contacts")
@@ -22,6 +23,19 @@ HTTP_ERRORS = {
     405: ("METHOD_NOT_ALLOWED", "此 API 路径不支持该请求方法。"),
     415: ("UNSUPPORTED_MEDIA_TYPE", "请求的媒体类型不受支持。"),
 }
+
+
+@api.before_request
+def require_account():
+    g.user = current_user()
+    if g.user is None:
+        return _error_response(401, "UNAUTHORIZED", "请先登录。")
+
+
+@api.after_request
+def private_response(response):
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @api.get("")

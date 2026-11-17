@@ -3,7 +3,9 @@
 import sqlite3
 from typing import Any
 
-from flask import current_app, g
+from flask import g
+
+from .accounts import contact_database
 
 CONTACT_FIELDS = ("name", "notes", "favorite")
 CONTACT_QUERY = """
@@ -23,29 +25,9 @@ CONTACT_ORDER = """
 
 
 def get_db() -> sqlite3.Connection:
-    """按需打开当前 Flask 应用上下文的数据库连接并启用外键。"""
-    connection = g.get("db")
-    if connection is None:
-        connection = sqlite3.connect(current_app.config["DATABASE"])
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        g.db = connection
-    return connection
-
-
-def close_db(_error: BaseException | None = None) -> None:
-    """在应用上下文结束时关闭已打开的数据库连接。"""
-    connection = g.pop("db", None)
-    if connection is not None:
-        connection.close()
-
-
-def init_db() -> None:
-    """执行建表脚本，创建缺失的表和索引。"""
-    with current_app.open_resource(
-        "schema.sql", "r", encoding="utf-8"
-    ) as schema:
-        get_db().executescript(schema.read())
+    if "contacts_db" not in g:
+        return contact_database(g.user["id"])
+    return g.contacts_db
 
 
 def select_contacts(
