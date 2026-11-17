@@ -6,6 +6,12 @@
 
 ## 1. 联系人数据与校验
 
+### 账号与数据范围（本次扩展）
+
+客户端以 JSON 向 `POST /api/v1/auth/register` 或 `POST /api/v1/auth/login` 提交 `{"name":"用户名","password":"密码"}`。注册成功即登录，两者返回 `{"user":{"id":1,"name":"用户名"}}` 并设置 HttpOnly 会话 Cookie，有效期七天。重复注册返回 409，登录凭据错误返回 401。`GET /api/v1/auth/session` 恢复会话，未登录返回 `{"user":null}`。`POST /api/v1/auth/logout` 发送空 JSON 对象并撤销当前会话。
+
+本次扩展将数据范围调整为每个账号一个通讯录。当前列表接口要求登录，未登录返回 401。账号信息存入 Flask instance 目录下的 `accounts.sqlite3`，每个账号按服务端生成的数字 ID 使用独立的 `contacts-<id>.sqlite3`。后续增删改、收藏和 Excel 接口均应从已验证的会话取得用户 ID，复用 `contact_database(user_id)`，每个文件沿用下文相同的联系人表结构。
+
 一个联系人可以有零到多条联系方式。同一类型可以保存多个值。API、SQLite 和 Excel 使用同一套业务校验：Flask 在写入前校验，SQLite 约束作为第二道检查。
 
 | JSON 字段 | 类型 | 写入规则 |
